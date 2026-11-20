@@ -1,6 +1,7 @@
 """FastAPI service over the pipeline's outputs.
 
-  POST /classify            a wafer map (2D list of 0/1/2) -> pattern, confidence, needs_review, yield
+  POST /classify            a wafer map (2D list of 0/1/2) -> pattern, confidence, needs_review, yield,
+                            what the pattern looks like and causes reported in cited papers
   POST /similar             a wafer map -> the k most similar labeled wafers from history
   GET  /similar/{lot}/{i}   the same, for a wafer already in the data (its own lot is excluded)
   GET  /lots/{lot}          one lot's yield and SPC status
@@ -24,6 +25,7 @@ from pydantic import BaseModel, Field
 
 from . import cnn
 from .etl import check
+from .defects import GUIDE, SOURCES
 from .features import features
 from .maps import CLASSES, die_yield, to_channels
 from .similar import SimilarIndex
@@ -90,8 +92,8 @@ def chart() -> pd.DataFrame:
 @app.post("/classify")
 def classify(body: WaferIn):
     wafer = parse(body.wafer_map)
-    probs = cnn.predict(model(), [wafer])[0]
     gbt, cfg = ensemble()
+    probs = cnn.predict(model(), [wafer], tta=cfg.get("tta", True))[0]
     if gbt is not None:
         w = cfg["cnn_weight"]
         probs = w * probs + (1 - w) * gbt.predict_proba(features(wafer)[None])[0]
@@ -100,7 +102,10 @@ def classify(body: WaferIn):
     return {"pattern": CLASSES[order[0]], "confidence": round(conf, 4),
             "needs_review": conf < cfg["review_threshold"],
             "top3": [{"pattern": CLASSES[i], "p": round(float(probs[i]), 4)} for i in order[:3]],
-            "die_yield": round(die_yield(wafer), 4)}
+            "die_yield": round(die_yield(wafer), 4),
+            "guide": {"looks": GUIDE[CLASSES[order[0]]]["looks"],
+                      "possible_causes": [{"cause": c, "source": SOURCES[s][0], "url": SOURCES[s][1]}
+                                          for c, s in GUIDE[CLASSES[order[0]]]["causes"]]}}
 
 
 @app.get("/lots/{lot}")

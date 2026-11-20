@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wafer Yield Demo</title>
+<meta name="description" content="Defect patterns, similar-wafer search, label audit, lot SPC and drift alarms on 811,457 real fab wafer maps (WM-811K).">
+<style>
+:root{
+  --bg:#f7f7f5;--surface:#ffffff;--text:#1b1b1f;--muted:#5f6068;--border:#e2e2de;
+  --accent:#1f5fbf;--accent-soft:#e6eefb;--pass:#9ecae1;--fail:#d62728;--off:transparent;
+  --ok:#1d7a46;--ok-soft:#e3f3ea;--warn:#a15c00;--warn-soft:#fbf0dc;--bad:#b42318;--bad-soft:#fdeceb;
+  --radius:10px;--shadow:0 1px 2px rgba(0,0,0,.06);
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#121316;--surface:#1b1c20;--text:#ececee;--muted:#a0a1a8;--border:#2c2d33;
+  --accent:#7aa7ff;--accent-soft:#1d2a44;--pass:#3f6f8f;--fail:#ff5a4f;
+  --ok:#5fd39a;--ok-soft:#14301f;--warn:#f0b35a;--warn-soft:#33270f;--bad:#ff7b72;--bad-soft:#3a1715;
+}}
+:root[data-theme="dark"]{
+  --bg:#121316;--surface:#1b1c20;--text:#ececee;--muted:#a0a1a8;--border:#2c2d33;
+  --accent:#7aa7ff;--accent-soft:#1d2a44;--pass:#3f6f8f;--fail:#ff5a4f;
+  --ok:#5fd39a;--ok-soft:#14301f;--warn:#f0b35a;--warn-soft:#33270f;--bad:#ff7b72;--bad-soft:#3a1715;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.55 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+a{color:var(--accent)}
+.wrap{max-width:1120px;margin:0 auto;padding:0 16px}
+header{padding:40px 0 20px}
+h1{font-size:clamp(26px,4vw,38px);line-height:1.15;margin:0 0 10px;letter-spacing:-.01em}
+h2{font-size:22px;margin:0 0 6px}
+h3{font-size:15px;margin:0 0 6px}
+.lede{color:var(--muted);max-width:760px;margin:0}
+.steps{display:flex;flex-wrap:wrap;gap:8px;margin:20px 0 0;padding:0;list-style:none}
+.steps a{display:inline-block;padding:6px 12px;border:1px solid var(--border);border-radius:999px;background:var(--surface);text-decoration:none;color:var(--text);font-size:13px}
+.steps b{color:var(--accent)}
+section{padding:28px 0;border-top:1px solid var(--border)}
+.kicker{font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--accent)}
+.sub{color:var(--muted);margin:0 0 16px;max-width:780px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:18px 0 0}
+.stat{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:12px 14px;box-shadow:var(--shadow)}
+.stat .n{font-size:22px;font-weight:650;font-variant-numeric:tabular-nums}
+.stat .l{font-size:12.5px;color:var(--muted)}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;box-shadow:var(--shadow)}
+.explorer{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:16px}
+@media (max-width:820px){.explorer{grid-template-columns:1fr}}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:12px}
+.chip{border:1px solid var(--border);background:var(--surface);color:var(--text);border-radius:999px;padding:4px 10px;font-size:12.5px;cursor:pointer}
+.chip[aria-pressed="true"]{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(72px,1fr));gap:8px;max-height:560px;overflow:auto;padding:2px}
+.thumb{border:1px solid var(--border);border-radius:8px;padding:4px;background:var(--surface);cursor:pointer;text-align:center;font-size:10.5px;color:var(--muted)}
+.thumb[aria-current="true"]{outline:2px solid var(--accent);outline-offset:1px}
+.thumb.miss{border-color:var(--bad)}
+.thumb canvas{width:100%;height:auto;display:block;image-rendering:pixelated}
+.detail{display:grid;grid-template-columns:200px minmax(0,1fr);gap:16px;align-items:start}
+@media (max-width:480px){.detail{grid-template-columns:1fr}}
+.big canvas{width:100%;max-width:200px;height:auto;image-rendering:pixelated;display:block}
+.badge{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:600}
+.b-ok{background:var(--ok-soft);color:var(--ok)}.b-bad{background:var(--bad-soft);color:var(--bad)}.b-warn{background:var(--warn-soft);color:var(--warn)}
+.bar{height:8px;background:var(--border);border-radius:99px;overflow:hidden;margin:3px 0 8px}
+.bar i{display:block;height:100%;background:var(--accent)}
+.row{display:flex;justify-content:space-between;gap:8px;font-size:13px}
+.muted{color:var(--muted)}
+.similar{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;margin-top:8px}
+.similar div{text-align:center;font-size:11px;color:var(--muted)}
+.similar canvas{width:100%;height:auto;image-rendering:pixelated;border:1px solid var(--border);border-radius:6px}
+.guide{font-size:13.5px;margin-top:10px;padding:10px 12px;border-left:3px solid var(--accent);background:var(--accent-soft);border-radius:0 8px 8px 0}
+.guide ul{margin:4px 0 0;padding-left:18px}
+table{border-collapse:collapse;width:100%;font-size:13.5px;font-variant-numeric:tabular-nums}
+th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--border)}
+th{color:var(--muted);font-weight:600;font-size:12.5px}
+.tablewrap{overflow-x:auto}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+.suspects{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px}
+.suspects div{font-size:11.5px;text-align:center;color:var(--muted)}
+.suspects canvas{width:100%;height:auto;image-rendering:pixelated;border:1px solid var(--border);border-radius:6px}
+img.chart{width:100%;height:auto;border:1px solid var(--border);border-radius:var(--radius);background:#fff}
+.legend{display:flex;gap:14px;font-size:12px;color:var(--muted);margin:6px 0 0}
+.legend span::before{content:"";display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px;background:var(--c)}
+footer{padding:28px 0 48px;color:var(--muted);font-size:13px;border-top:1px solid var(--border)}
+.note{font-size:13px;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+<header>
+  <div class="kicker">Wafer Yield · WM-811K</div>
+  <h1>From 811,457 real wafer maps to calls a yield engineer can trust</h1>
+  <p class="lede">A chip fab tests every die and marks it pass or fail. The fails often form a shape. Each shape
+  points to a different process problem. This project reads the maps, names the shape, says when it is unsure,
+  shows similar past wafers, questions its own labels, flags abnormal lots and warns when new wafers stop
+  looking like the ones it was checked on.</p>
+  <ul class="steps">
+    <li><a href="#detect"><b>1</b> Detect</a></li><li><a href="#explain"><b>2</b> Explain</a></li>
+    <li><a href="#trust"><b>3</b> Trust</a></li><li><a href="#act"><b>4</b> Act</a></li><li><a href="#watch"><b>5</b> Watch</a></li>
+  </ul>
+  <div class="stats" id="stats"></div>
+</header>
+
+<section id="detect">
+  <div class="kicker">1 · Detect and 2 · Explain</div>
+  <h2 id="explain">Try it on real Test wafers</h2>
+  <p class="sub">Each wafer below comes from a lot the models never trained on, picked at random, misses included
+  (red border). Click one to see the ensemble's answer, how sure it is, what that pattern may mean and the five most
+  similar wafers from other lots.</p>
+  <div class="explorer">
+    <div class="card">
+      <div class="chips" id="chips" role="group" aria-label="Filter wafers"></div>
+      <div class="grid" id="grid"></div>
+      <div class="legend"><span style="--c:var(--pass)">pass</span><span style="--c:var(--fail)">fail</span></div>
+    </div>
+    <div class="card" id="detail" aria-live="polite"></div>
+  </div>
+</section>
+
+<section id="trust">
+  <div class="kicker">3 · Trust</div>
+  <h2>Know when to ask a person. Question the labels too</h2>
+  <p class="sub" id="trust-sub"></p>
+  <div class="two">
+    <div class="card"><h3>"Needs review" cut-off</h3><div class="tablewrap"><table id="review"></table></div>
+      <p class="note">The cut-off was tuned on validation lots to send 5% to review. Some wrong answers are still confident, so review is a safety net, not a guarantee.</p></div>
+    <div class="card"><h3>Label audit</h3><p class="note" id="audit-note"></p><div class="suspects" id="suspects"></div></div>
+  </div>
+</section>
+
+<section id="act">
+  <div class="kicker">4 · Act</div>
+  <h2>Flag the lots that really are abnormal</h2>
+  <p class="sub" id="act-sub"></p>
+  <div class="two">
+    <div><img class="chart" src="img/p_chart.png" alt="Laney p' chart for the busiest product: lot fail rates against the plain p-chart and Laney upper limits"></div>
+    <div class="card"><h3>Flagged lots that also hold labeled defect wafers</h3><p class="note" id="lots-note"></p><div class="tablewrap"><table id="lots"></table></div></div>
+  </div>
+</section>
+
+<section id="watch">
+  <div class="kicker">5 · Watch</div>
+  <h2>Warn when new wafers stop looking familiar</h2>
+  <p class="sub" id="watch-sub"></p>
+  <img class="chart" src="img/drift.png" alt="Drift metrics for Test batches of 500 wafers against their alarm lines">
+</section>
+
+<footer>
+  <p>Data: Wu, Jang and Chen, IEEE Transactions on Semiconductor Manufacturing, 2015 (WM-811K, public domain on Kaggle).
+  Code, tests and every number's source: <a href="https://github.com/navyathag13-ui/wafer-yield">github.com/navyathag13-ui/wafer-yield</a>.</p>
+  <p>Causes come from the cited papers and are leads to check, not diagnoses.</p>
+</footer>
+</div>
+
+<script>
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const pct = (x, d = 1) => (100 * x).toFixed(d) + "%";
+const fmt = n => n.toLocaleString("en-US");
+let D, filter = "all", current = null;
+
+function draw(canvas, m, scale) {
+  const s = scale || Math.max(1, Math.floor(160 / Math.max(m.r, m.c)));
+  canvas.width = m.c * s; canvas.height = m.r * s;
+  const g = canvas.getContext("2d"), pass = css("--pass"), fail = css("--fail");
+  for (let y = 0; y < m.r; y++) for (let x = 0; x < m.c; x++) {
+    const v = m.d.charCodeAt(y * m.c + x) - 48;
+    if (!v) continue;
+    g.fillStyle = v === 2 ? fail : pass; g.fillRect(x * s, y * s, s, s);
+  }
+  return canvas;
+}
+const canvasFor = (m, s) => draw(document.createElement("canvas"), m, s);
+
+function el(tag, attrs = {}, ...kids) {
+  const e = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) k === "class" ? e.className = v : e.setAttribute(k, v);
+  for (const k of kids) e.append(k);
+  return e;
+}
+
+function stats() {
+  const n = D.numbers, box = document.getElementById("stats");
+  [[fmt(n.wafers), "real wafer maps, " + fmt(n.lots) + " lots"],
+   [n.ensemble.macro_f1.toFixed(3), "ensemble macro F1 on " + fmt(n.test) + " unseen-lot wafers"],
+   [pct(n.review_chosen.auto_accuracy), "accuracy on the " + pct(1 - n.review_chosen.review_share, 0) + " of wafers it labels by itself"],
+   [pct(n.similar.embedding.mean_defects), "of similar wafers share the pattern (pixels: " + pct(n.similar.pixels.mean_defects) + ")"],
+   [pct(n.spc.laney_out_of_control_share), "lots flagged by Laney p' (plain p-chart: " + pct(n.spc.p_chart_out_of_control_share, 0) + ")"]]
+  .forEach(([v, l]) => box.append(el("div", {class: "stat"}, el("div", {class: "n"}, v), el("div", {class: "l"}, l))));
+}
+
+function chips() {
+  const box = document.getElementById("chips");
+  const opts = [["all", "All"], ["miss", "Misses"], ["review", "Needs review"], ...D.classes.map(c => [c, c])];
+  for (const [k, label] of opts) {
+    const b = el("button", {class: "chip", type: "button", "aria-pressed": String(k === filter)}, label);
+    b.onclick = () => { filter = k; box.querySelectorAll(".chip").forEach(x => x.setAttribute("aria-pressed", "false")); b.setAttribute("aria-pressed", "true"); grid(); };
+    box.append(b);
+  }
+}
+
+function grid() {
+  const g = document.getElementById("grid"); g.textContent = "";
+  const keep = w => filter === "all" || (filter === "miss" && w.pred !== w.label) || (filter === "review" && w.review) || w.label === filter;
+  const list = D.wafers.filter(keep);
+  for (const w of list) {
+    const t = el("button", {class: "thumb" + (w.pred !== w.label ? " miss" : ""), type: "button", "aria-label": `${w.label} wafer, predicted ${w.pred}`},
+      canvasFor(w.map, 2), w.label);
+    t.onclick = () => show(w, t);
+    g.append(t);
+    if (w === current) t.setAttribute("aria-current", "true");
+  }
+  if (!list.includes(current) && list.length) show(list[0], g.firstChild);
+  if (!list.length) document.getElementById("detail").textContent = "No wafers in this filter.";
+}
+
+function guideBlock(pattern) {
+  const gd = D.guide[pattern], box = el("div", {class: "guide"});
+  box.append(el("strong", {}, pattern + ": "), gd.looks);
+  if (gd.causes.length) {
+    const ul = el("ul");
+    for (const [cause, src] of gd.causes) {
+      const s = D.sources[src];
+      ul.append(el("li", {}, cause + " ", el("a", {href: s.url, target: "_blank", rel: "noopener", title: s.text}, "[source]")));
+    }
+    box.append(el("div", {class: "muted", style: "margin-top:6px"}, "Published papers link it to:"), ul);
+  } else box.append(el("div", {class: "muted", style: "margin-top:6px"}, "No specific cause in the papers checked."));
+  return box;
+}
+
+function show(w, thumb) {
+  current = w;
+  document.querySelectorAll(".thumb").forEach(x => x.removeAttribute("aria-current"));
+  thumb && thumb.setAttribute("aria-current", "true");
+  const d = document.getElementById("detail"); d.textContent = "";
+  const right = el("div");
+  const ok = w.pred === w.label;
+  right.append(el("div", {class: "row"}, el("span", {}, "True label: ", el("strong", {}, w.label)),
+    el("span", {class: "badge " + (ok ? "b-ok" : "b-bad")}, ok ? "correct" : "miss")));
+  right.append(el("div", {class: "row", style: "margin-top:4px"}, el("span", {}, "Ensemble says: ", el("strong", {}, w.pred)),
+    w.review ? el("span", {class: "badge b-warn"}, "needs review") : el("span", {class: "muted"}, "auto-labeled")));
+  for (const [c, p] of w.top3) {
+    right.append(el("div", {class: "row muted", style: "margin-top:6px"}, el("span", {}, c), el("span", {}, pct(p))));
+    const bar = el("div", {class: "bar"}); bar.append(el("i", {style: `width:${100 * p}%`})); right.append(bar);
+  }
+  right.append(el("div", {class: "muted", style: "font-size:12px"}, `${w.lot}, wafer ${w.i}. Review below ${pct(D.review_threshold)} confidence.`));
+  d.append(el("div", {class: "detail"}, el("div", {class: "big"}, canvasFor(w.map)), right));
+  d.append(guideBlock(w.pred));
+  d.append(el("h3", {style: "margin-top:14px"}, "Most similar wafers from other lots"));
+  const sim = el("div", {class: "similar"});
+  for (const s of w.similar) sim.append(el("div", {}, canvasFor(s.map, 2), `${s.label}`, el("br"), `sim ${s.sim.toFixed(3)}`));
+  d.append(sim);
+}
+
+function trust() {
+  const n = D.numbers, a = n.audit;
+  document.getElementById("trust-sub").textContent =
+    `The ensemble labels a wafer by itself only when it is at least ${pct(D.review_threshold)} sure; the rest go to an engineer. ` +
+    `WM-811K's labels were made by people, so the project also flags labels that disagree with similar wafers from other lots.`;
+  const t = document.getElementById("review");
+  t.append(el("tr", {}, el("th", {}, "Cut-off"), el("th", {}, "Sent to review"), el("th", {}, "Accuracy on rest"), el("th", {}, "Macro F1 on rest")));
+  t.append(el("tr", {}, el("td", {}, "none"), el("td", {}, "0%"), el("td", {}, pct(n.ensemble.accuracy)), el("td", {}, n.ensemble.macro_f1.toFixed(3))));
+  const rows = [...n.review.filter(r => [0.6, 0.9].includes(r.threshold)), {...n.review_chosen, chosen: true}];
+  for (const r of rows.sort((x, y) => x.threshold - y.threshold)) {
+    const chosen = !!r.chosen;
+    t.append(el("tr", {}, el("td", {}, chosen ? el("strong", {}, r.threshold.toFixed(3) + " (chosen)") : r.threshold.toFixed(1)),
+      el("td", {}, pct(r.review_share)), el("td", {}, pct(r.auto_accuracy)), el("td", {}, r.auto_macro_f1.toFixed(3))));
+  }
+  document.getElementById("audit-note").textContent =
+    `${fmt(a.suspects)} of ${fmt(a.labeled_wafers)} labeled wafers (${pct(a.suspect_share, 2)}) are suspects: 8 or more of their 10 most similar ` +
+    `other-lot wafers agree on a different label and the ensemble agrees. A random sample, given label on top:`;
+  const box = document.getElementById("suspects");
+  for (const s of D.suspects) box.append(el("div", {}, canvasFor(s.map, 2), `labeled ${s.label}`, el("br"), `looks ${s.looks} (${s.votes}/10)`));
+}
+
+function act() {
+  const s = D.numbers.spc, one = D.numbers.spc_one_chart;
+  document.getElementById("act-sub").textContent =
+    `A textbook p-chart flags ${pct(one.p_chart_out_of_control_share)} of lots when every product shares one chart. It still flags ${pct(s.p_chart_out_of_control_share)} ` +
+    `per product, because real lots vary far more than the binomial model expects. Laney's p' chart measures that extra spread ` +
+    `(median ${s.laney_sigma_z_median}x) and flags ${fmt(s.laney_out_of_control_lots)} lots (${pct(s.laney_out_of_control_share)}) across ${s.products_charted} products.`;
+  document.getElementById("lots-note").textContent =
+    `${fmt(D.flagged_with_pattern)} of the ${fmt(D.flagged_total)} flagged lots contain labeled defect wafers, so the chart's alarm comes with a pattern to start from. Worst first:`;
+  const t = document.getElementById("lots");
+  t.append(el("tr", {}, el("th", {}, "Lot"), el("th", {}, "Product"), el("th", {}, "Fail rate"), el("th", {}, "Limit"), el("th", {}, "Top pattern")));
+  for (const l of D.lots) t.append(el("tr", {}, el("td", {}, l.lot), el("td", {}, l.product), el("td", {}, pct(l.fail_rate)), el("td", {}, pct(l.ucl)), el("td", {}, l.pattern || "unlabeled")));
+}
+
+function watch() {
+  const d = D.numbers.drift;
+  document.getElementById("watch-sub").textContent =
+    `Every batch of ${d.batch} wafers gets three numbers: the share the ensemble is unsure about, how far the predicted pattern mix ` +
+    `moved (PSI) and how far wafers sit from anything seen in training. Alarm lines are the 99.9th percentile of normal batches, built from whole lots because wafers arrive by lot. ` +
+    `Calibrated and tested by 5-fold cross-validation over validation lots, it fired on ${pct(d.false_alarm_rate_5fold_validation_lots)} of normal batches; streaming the Test split ` +
+    `in lot order, it fired on ${d.test_batches_alarmed} of ${d.test_batches} batches (${pct(d.test_alarm_rate, 0)}).`;
+}
+
+fetch("demo.json").then(r => r.json()).then(j => {
+  D = j; stats(); chips(); grid(); trust(); act(); watch();
+  matchMedia("(prefers-color-scheme: dark)").addEventListener("change", () => { grid(); });
+}).catch(e => { document.getElementById("detail").textContent = "Could not load demo.json: " + e; });
+</script>
+</body>
+</html>

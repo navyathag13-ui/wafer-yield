@@ -1,0 +1,55 @@
+{
+  "label_audit": {
+    "rule": ">= 8 of 10 nearest other-lot wafers agree on a different label and the ensemble gives it >= 0.8",
+    "labeled_wafers": 172950,
+    "suspects": 504,
+    "suspect_share": 0.0029,
+    "by_role": {
+      "test": 486,
+      "val": 11,
+      "fit": 7
+    },
+    "given_to_suggested": {
+      "Loc -> none": 143,
+      "Center -> none": 88,
+      "Edge-Loc -> none": 80,
+      "none -> Edge-Loc": 50,
+      "Scratch -> none": 40,
+      "Loc -> Edge-Loc": 16,
+      "none -> Loc": 16,
+      "Loc -> Center": 9,
+      "none -> Scratch": 7,
+      "none -> Center": 7,
+      "Edge-Loc -> Loc": 7,
+      "Scratch -> Loc": 5
+    },
+    "test_macro_f1_all": 0.7032,
+    "test_macro_f1_without_suspects": 0.7181,
+    "note": "Dropping suspects favours the model (it agrees with their suggested label), so the second F1 is an upper bound, not a corrected score."
+  },
+  "drift": {
+    "batch": 500,
+    "quantile": 0.999,
+    "thresholds": {
+      "review_share": 0.1212,
+      "mix_psi": 0.6699,
+      "novelty": 0.0023
+    },
+    "false_alarm_rate_5fold_validation_lots": 0.096,
+    "test_batches": 237,
+    "test_batches_alarmed": 229,
+    "test_alarm_rate": 0.9662,
+    "fired_by_metric": {
+      "mix_psi": 202,
+      "novelty": 118,
+      "review_share": 59
+    },
+    "median_test_batch": {
+      "review_share": 0.092,
+      "mix_psi": 0.9446,
+      "novelty": 0.0023
+    },
+    "median_validation_wafer_novelty": 0.0019,
+    "validation_review_share": 0.0501
+  }
+}

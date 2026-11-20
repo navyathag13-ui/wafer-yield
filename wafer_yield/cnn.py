@@ -40,19 +40,34 @@ def augment(x: torch.Tensor) -> torch.Tensor:
     return torch.flip(x, dims=(3,)) if torch.rand(1) < 0.5 else x
 
 
+def dihedral(x: torch.Tensor):
+    """The 8 rotations and flips of a batch. A defect pattern keeps its class under all of them."""
+    for k in range(4):
+        r = torch.rot90(x, k, dims=(2, 3))
+        yield r
+        yield torch.flip(r, dims=(3,))
+
+
+@torch.no_grad()
+def probs_tta(model: "WaferCNN", x: torch.Tensor) -> torch.Tensor:
+    """Test-time augmentation: average the softmax over the 8 rotations and flips."""
+    return torch.stack([torch.softmax(model(v), dim=1) for v in dihedral(x)]).mean(0)
+
+
 def device() -> torch.device:
     return torch.device("mps" if torch.backends.mps.is_available() else "cpu")
 
 
 @torch.no_grad()
-def predict(model: WaferCNN, wafers: list[np.ndarray], batch: int = 512) -> np.ndarray:
-    """Class probabilities, one row per wafer."""
+def predict(model: WaferCNN, wafers: list[np.ndarray], batch: int = 512, tta: bool = True) -> np.ndarray:
+    """Class probabilities, one row per wafer (averaged over 8 rotations and flips when tta)."""
     model.eval()
     dev = next(model.parameters()).device
     out = []
     for i in range(0, len(wafers), batch):
         x = torch.from_numpy(np.stack([to_channels(w) for w in wafers[i:i + batch]])).to(dev)
-        out.append(torch.softmax(model(x), dim=1).cpu().numpy())
+        p = probs_tta(model, x) if tta else torch.softmax(model(x), dim=1)
+        out.append(p.cpu().numpy())
     return np.concatenate(out) if out else np.zeros((0, len(CLASSES)), dtype=np.float32)
 
 

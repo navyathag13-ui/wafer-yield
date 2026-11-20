@@ -15,7 +15,27 @@ baseline macro F1 0.6695
 {'epoch': 13, 'loss': 0.0634, 'val_macro_f1': 0.8874}
 {'epoch': 14, 'loss': 0.0342, 'val_macro_f1': 0.8893}
 {'epoch': 15, 'loss': 0.0782, 'val_macro_f1': 0.8892}
-cnn macro F1 0.6779
-ensemble weight 0.3 macro F1 0.6999
-review threshold 0.785 {'threshold': 0.785, 'review_share': 0.1073, 'auto_accuracy': 0.9893, 'auto_macro_f1': 0.8804, 'defects_reviewed_share': 0.4443}
-similar wafers precision@10 0.5964 vs pixels 0.2596
+pseudo-labels: 56332 of 200000 unlabeled wafers ({'Center': 2022, 'Donut': 47, 'Edge-Loc': 1228, 'Edge-Ring': 1100, 'Loc': 113, 'Near-full': 150, 'Random': 1319, 'Scratch': 353, 'none': 50000})
+{'epoch': 1, 'loss': 0.5014, 'val_macro_f1': 0.5909}
+{'epoch': 2, 'loss': 0.1109, 'val_macro_f1': 0.706}
+{'epoch': 3, 'loss': 0.1861, 'val_macro_f1': 0.6529}
+{'epoch': 4, 'loss': 0.5045, 'val_macro_f1': 0.6777}
+{'epoch': 5, 'loss': 0.2392, 'val_macro_f1': 0.746}
+{'epoch': 6, 'loss': 0.1443, 'val_macro_f1': 0.7347}
+{'epoch': 7, 'loss': 0.4924, 'val_macro_f1': 0.8283}
+{'epoch': 8, 'loss': 0.437, 'val_macro_f1': 0.8423}
+{'epoch': 9, 'loss': 0.0836, 'val_macro_f1': 0.8597}
+{'epoch': 10, 'loss': 0.1773, 'val_macro_f1': 0.865}
+{'epoch': 11, 'loss': 0.0269, 'val_macro_f1': 0.8884}
+{'epoch': 12, 'loss': 0.0266, 'val_macro_f1': 0.8827}
+{'epoch': 13, 'loss': 0.0072, 'val_macro_f1': 0.888}
+{'epoch': 14, 'loss': 0.0104, 'val_macro_f1': 0.8972}
+{'epoch': 15, 'loss': 0.0142, 'val_macro_f1': 0.8941}
+cnn: val 0.8893 test 0.6779
+cnn+tta: val 0.8941 test 0.6822
+cnn_pseudo: val 0.8972 test 0.6951
+cnn_pseudo+tta: val 0.8984 test 0.7017
+chosen CNN cnn_pseudo+tta test macro F1 0.7017
+ensemble weight 0.3 macro F1 0.7032
+review threshold 0.798 {'threshold': 0.798, 'review_share': 0.1059, 'auto_accuracy': 0.9902, 'auto_macro_f1': 0.89, 'defects_reviewed_share': 0.4469}
+similar wafers precision@10 0.5989 vs pixels 0.2596

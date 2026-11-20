@@ -4,3 +4,4 @@ __pycache__/
 data/*.pkl
 data/*.zip
 data/*.parquet
+.claude/

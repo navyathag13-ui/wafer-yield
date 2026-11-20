@@ -3,7 +3,10 @@
     python scripts/train.py [--epochs 15]
 
 Baseline: gradient-boosted trees on the hand-made features (wafer_yield/features.py).
-CNN:      wafer_yield/cnn.py, with 10% of Training held back to pick the best epoch.
+CNN:      wafer_yield/cnn.py, trained on Training lots minus 10% of lots held back for validation.
+          Round 2 adds unlabeled wafers the round-1 CNN labels with >= 0.95 confidence
+          (pseudo-labels). Each CNN is scored with and without averaging over 8 rotations and
+          flips; validation picks the final one.
 Ensemble: weighted average of the two, weight and "needs review" threshold picked on validation.
 Similar-wafer search: CNN embeddings, scored by precision@10 against plain pixel similarity.
 Everything is scored once on the Test split. Writes results/metrics.json, cnn.pt, gbt.joblib,
@@ -34,7 +37,7 @@ sys.path.insert(0, str(ROOT))
 from wafer_yield import cnn  # noqa: E402
 from wafer_yield.etl import decode  # noqa: E402
 from wafer_yield.features import features  # noqa: E402
-from wafer_yield.maps import CLASS_INDEX, CLASSES, FAIL, OFF, pool  # noqa: E402
+from wafer_yield.maps import CLASS_INDEX, CLASSES, FAIL, OFF, SIZE, pool  # noqa: E402
 from wafer_yield.similar import precision_at_k  # noqa: E402
 
 
@@ -94,15 +97,53 @@ def channels(codes: torch.Tensor) -> torch.Tensor:
 
 
 @torch.no_grad()
-def predict_codes(model, codes: np.ndarray, dev) -> np.ndarray:
+def predict_codes(model, codes: np.ndarray, dev, tta: bool = False) -> np.ndarray:
     model.eval()
     out = []
     for i in range(0, len(codes), 1024):
-        out.append(torch.softmax(model(channels(torch.from_numpy(codes[i:i + 1024])).to(dev)), 1).cpu().numpy())
-    return np.concatenate(out)
+        x = channels(torch.from_numpy(codes[i:i + 1024])).to(dev)
+        p = cnn.probs_tta(model, x) if tta else torch.softmax(model(x), 1)
+        out.append(p.cpu().numpy())
+    return np.concatenate(out) if out else np.zeros((0, len(CLASSES)), dtype=np.float32)
 
 
-def main(epochs: int) -> None:
+def unlabeled_codes(skip_lots: set, limit: int = 200_000, seed: int = 0) -> tuple[np.ndarray, pd.DataFrame]:
+    """Pooled maps of up to `limit` unlabeled wafers, minus any lot in validation or Test.
+    Unlabeled sister wafers of a Test lot would leak that lot's defect into training.
+    A random sample (not all 638K) keeps memory near 1 GB: the whole pool swapped a 16 GB laptop."""
+    import pyarrow.parquet as pq
+    path = ROOT / "data" / "wafers.parquet"
+    head = pq.read_table(path, columns=["lot", "wafer_index", "label"]).to_pandas()
+    eligible = np.flatnonzero(head["label"].isna().to_numpy() & ~head["lot"].isin(skip_lots).to_numpy())
+    rng = np.random.default_rng(seed)
+    pick = np.sort(rng.choice(eligible, min(limit, len(eligible)), replace=False))
+    out = np.empty((len(pick), SIZE, SIZE), dtype=np.uint8)
+    offset, j = 0, 0
+    for b in pq.ParquetFile(path).iter_batches(batch_size=50000, columns=["rows", "cols", "map"]):
+        n = b.num_rows
+        rows, cols, blobs = b.column(0).to_numpy(), b.column(1).to_numpy(), b.column(2)
+        while j < len(pick) and pick[j] < offset + n:
+            k = pick[j] - offset
+            out[j] = pool(np.frombuffer(blobs[k].as_py(), dtype=np.uint8).reshape(rows[k], cols[k]))
+            j += 1
+        offset += n
+    return out, head.iloc[pick][["lot", "wafer_index"]].reset_index(drop=True)
+
+
+def pick_pseudo(probs: np.ndarray, conf: float, cap_none: int, cap_mult: int, fit_counts: np.ndarray) -> np.ndarray:
+    """Indices of unlabeled wafers to train on with the model's own label: only very confident
+    ones, at most cap_mult x each defect class's real count, and at most cap_none clean wafers,
+    so the pseudo set cannot drown the real labels."""
+    pred, top = probs.argmax(1), probs.max(1)
+    keep = []
+    for c in range(len(CLASSES)):
+        idx = np.flatnonzero((pred == c) & (top >= conf))
+        cap = cap_none if CLASSES[c] == "none" else cap_mult * int(fit_counts[c])
+        keep.append(idx[np.argsort(-top[idx])][:cap])
+    return np.concatenate(keep)
+
+
+def main(epochs: int, pseudo: bool) -> None:
     t0 = time.perf_counter()
     df, maps, y = load()
     tr, te = (df["split"] == "Training").to_numpy(), (df["split"] == "Test").to_numpy()
@@ -137,12 +178,53 @@ def main(epochs: int) -> None:
     dev = cnn.device()
     t2 = time.perf_counter()
     model, history = train_cnn(codes[fit_idx], y[fit_idx], codes[val_idx], y[val_idx], epochs, dev)
-    p_cnn_val, p_cnn_te = predict_codes(model, codes[val_idx], dev), predict_codes(model, codes[te_idx], dev)
-    deep = report(y[te_idx], p_cnn_te.argmax(1))
-    deep["seconds"] = round(time.perf_counter() - t2, 1)
-    deep["history"] = history
+    stages = {"cnn": {"model": model, "history": history, "seconds": round(time.perf_counter() - t2, 1)}}
+
+    # Round 2: label the confident unlabeled wafers with round 1's model and retrain on both.
+    if pseudo:
+        t_u = time.perf_counter()
+        skip = set(lots[val_idx]) | set(lots[te_idx])
+        u_codes, u_meta = unlabeled_codes(skip)
+        u_probs = predict_codes(model, u_codes, dev, tta=True)
+        pick = pick_pseudo(u_probs, conf=0.95, cap_none=50000, cap_mult=3,
+                           fit_counts=np.bincount(y[fit_idx], minlength=len(CLASSES)))
+        u_y = u_probs[pick].argmax(1)
+        print(f"pseudo-labels: {len(pick)} of {len(u_codes)} unlabeled wafers "
+              f"({dict(zip(CLASSES, np.bincount(u_y, minlength=len(CLASSES)).tolist()))})", flush=True)
+        torch.manual_seed(0)
+        t3 = time.perf_counter()
+        m2, h2 = train_cnn(np.concatenate([codes[fit_idx], u_codes[pick]]), np.concatenate([y[fit_idx], u_y]),
+                           codes[val_idx], y[val_idx], epochs, dev)
+        stages["cnn_pseudo"] = {"model": m2, "history": h2, "seconds": round(time.perf_counter() - t3, 1),
+                                "unlabeled_pool": int(len(u_codes)), "pseudo_labels": int(len(pick)),
+                                "pseudo_label_counts": dict(zip(CLASSES, np.bincount(u_y, minlength=len(CLASSES)).tolist())),
+                                "prep_seconds": round(t3 - t_u, 1)}
+        del u_codes
+
+    # Score every CNN variant with and without rotation averaging; validation picks the final one.
+    variants = {}
+    for name, st in stages.items():
+        for tta in (False, True):
+            key = name + ("+tta" if tta else "")
+            pv = predict_codes(st["model"], codes[val_idx], dev, tta=tta)
+            pt = predict_codes(st["model"], codes[te_idx], dev, tta=tta)
+            r = report(y[te_idx], pt.argmax(1))
+            r["val_macro_f1"] = round(f1_score(y[val_idx], pv.argmax(1), average="macro"), 4)
+            r["seconds"] = st["seconds"]
+            variants[key] = {"report": r, "pv": pv, "pt": pt, "model": st["model"], "tta": tta}
+            print(f"{key}: val {r['val_macro_f1']} test {r['macro_f1']}", flush=True)
+    chosen = max(variants, key=lambda k: variants[k]["report"]["val_macro_f1"])
+    model, use_tta = variants[chosen]["model"], variants[chosen]["tta"]
+    p_cnn_val, p_cnn_te = variants[chosen]["pv"], variants[chosen]["pt"]
+    deep = dict(variants[chosen]["report"])
+    deep["variant"] = chosen
+    deep["history"] = stages[chosen.split("+")[0]]["history"]
     deep["device"] = str(dev)
-    print("cnn macro F1", deep["macro_f1"])
+    cnn_variants = {k: {kk: v["report"][kk] for kk in ("accuracy", "macro_f1", "macro_f1_defects_only", "val_macro_f1")}
+                    | {"Scratch_f1": v["report"]["per_class"]["Scratch"]["f1-score"]} for k, v in variants.items()}
+    if pseudo:
+        cnn_variants["pseudo_info"] = {k: v for k, v in stages["cnn_pseudo"].items() if k not in ("model", "history")}
+    print("chosen CNN", chosen, "test macro F1", deep["macro_f1"])
 
     # Ensemble: weighted average of the two models' probabilities, weight picked on validation.
     weights = np.round(np.linspace(0, 1, 11), 2)
@@ -172,13 +254,21 @@ def main(epochs: int) -> None:
     out.mkdir(exist_ok=True)
     torch.save({k: v.cpu() for k, v in model.state_dict().items()}, out / "cnn.pt")
     joblib.dump(gbt, out / "gbt.joblib")
-    (out / "ensemble.json").write_text(json.dumps({"cnn_weight": w_best, "review_threshold": round(t_review, 4)}))
+    (out / "ensemble.json").write_text(json.dumps({"cnn_weight": w_best, "review_threshold": round(t_review, 4),
+                                                   "tta": use_tta}))
+    # Ensemble probabilities for every labeled wafer, for the label audit (scripts/audit.py).
+    p_all = w_best * predict_codes(model, codes, dev, tta=use_tta) + (1 - w_best) * gbt.predict_proba(feats)
+    role = np.full(len(df), "fit", dtype=object)
+    role[val_idx], role[te_idx] = "val", "test"
+    pd.DataFrame(p_all.astype(np.float32), columns=[f"p_{c}" for c in CLASSES]).assign(
+        lot=df["lot"].to_numpy(), wafer_index=df["wafer_index"].to_numpy(), label=df["label"].to_numpy(),
+        role=role).to_parquet(out / "labeled_predictions.parquet")
     np.save(out / "embeddings.npy", emb.astype(np.float16))
     df[["lot", "wafer_index", "label", "split"]].to_parquet(out / "embedding_index.parquet")
     cm = confusion_matrix(y[te_idx], p_ens_te.argmax(1), labels=range(len(CLASSES)))
     metrics = {"train": int(len(fit_idx)), "val": int(len(val_idx)), "test": int(len(te_idx)),
                "test_label_counts": {c: int((y[te_idx] == i).sum()) for i, c in enumerate(CLASSES)},
-               "baseline_gbt": base, "cnn": deep, "ensemble": ens, "review": review,
+               "baseline_gbt": base, "cnn": deep, "cnn_variants": cnn_variants, "ensemble": ens, "review": review,
                "review_threshold": round(t_review, 4), "similar_wafers": sim,
                "ensemble_confusion": cm.tolist(), "cnn_confusion":
                    confusion_matrix(y[te_idx], p_cnn_te.argmax(1), labels=range(len(CLASSES))).tolist(),
@@ -245,4 +335,6 @@ def plot_confusion(cm: np.ndarray, path: Path) -> None:
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--epochs", type=int, default=15)
-    main(ap.parse_args().epochs)
+    ap.add_argument("--no-pseudo", action="store_true", help="skip the unlabeled-wafer round")
+    a = ap.parse_args()
+    main(a.epochs, not a.no_pseudo)

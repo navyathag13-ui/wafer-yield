@@ -57,6 +57,7 @@ def test_classify(client):
     assert body["pattern"] in CLASSES and len(body["top3"]) == 3 and 0 < body["die_yield"] < 1
     assert body["needs_review"] is True          # threshold 0.99: an untrained model is never that sure
     assert abs(sum(t["p"] for t in body["top3"])) <= 1.0001
+    assert body["guide"]["looks"] and all(c["url"].startswith("http") for c in body["guide"]["possible_causes"])
 
 
 def test_classify_rejects_bad_maps(client):
