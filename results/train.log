@@ -1,0 +1,21 @@
+labeled wafers: 172950 (Training 54355, Test 118595); load 2s
+baseline macro F1 0.6695
+{'epoch': 1, 'loss': 0.5357, 'val_macro_f1': 0.467}
+{'epoch': 2, 'loss': 0.5621, 'val_macro_f1': 0.6462}
+{'epoch': 3, 'loss': 0.5973, 'val_macro_f1': 0.5529}
+{'epoch': 4, 'loss': 0.4021, 'val_macro_f1': 0.4972}
+{'epoch': 5, 'loss': 0.4621, 'val_macro_f1': 0.6648}
+{'epoch': 6, 'loss': 0.0678, 'val_macro_f1': 0.5879}
+{'epoch': 7, 'loss': 0.0642, 'val_macro_f1': 0.8409}
+{'epoch': 8, 'loss': 0.1948, 'val_macro_f1': 0.8446}
+{'epoch': 9, 'loss': 0.4921, 'val_macro_f1': 0.8584}
+{'epoch': 10, 'loss': 0.0581, 'val_macro_f1': 0.8618}
+{'epoch': 11, 'loss': 0.0529, 'val_macro_f1': 0.8833}
+{'epoch': 12, 'loss': 0.0525, 'val_macro_f1': 0.8833}
+{'epoch': 13, 'loss': 0.0634, 'val_macro_f1': 0.8874}
+{'epoch': 14, 'loss': 0.0342, 'val_macro_f1': 0.8893}
+{'epoch': 15, 'loss': 0.0782, 'val_macro_f1': 0.8892}
+cnn macro F1 0.6779
+ensemble weight 0.3 macro F1 0.6999
+review threshold 0.785 {'threshold': 0.785, 'review_share': 0.1073, 'auto_accuracy': 0.9893, 'auto_macro_f1': 0.8804, 'defects_reviewed_share': 0.4443}
+similar wafers precision@10 0.5964 vs pixels 0.2596

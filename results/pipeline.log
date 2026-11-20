@@ -1,0 +1,65 @@
+{
+  "etl": {
+    "input": 811457,
+    "loaded": 811457,
+    "labeled": 172950,
+    "unlabeled": 638507
+  },
+  "etl_seconds": 85.6,
+  "split_counts": {
+    "unlabeled": 638507,
+    "Test": 118595,
+    "Training": 54355
+  },
+  "label_counts": {
+    "none": 147431,
+    "Edge-Ring": 9680,
+    "Edge-Loc": 5189,
+    "Center": 4294,
+    "Loc": 3593,
+    "Scratch": 1193,
+    "Random": 866,
+    "Donut": 555,
+    "Near-full": 149
+  },
+  "distinct_map_shapes": 632,
+  "lots": 46293,
+  "wafers_per_lot_median": 24.0,
+  "overall_die_yield": 0.9328,
+  "one_chart_all_products": {
+    "p_chart_out_of_control_share": 0.9658,
+    "laney_sigma_z": 31.31,
+    "laney_out_of_control_share": 0.0515,
+    "run_rule_hits": 18286
+  },
+  "per_product": {
+    "products": 576,
+    "products_charted": 202,
+    "lots_charted": 44221,
+    "wafers_in_charted_lots": 772270,
+    "p_chart_out_of_control_share": 0.8317,
+    "laney_sigma_z_median": 11.13,
+    "laney_out_of_control_lots": 1861,
+    "laney_out_of_control_share": 0.0421,
+    "run_rule_hits": 6209,
+    "out_of_control_top_patterns": {
+      "no labeled defect": 1426,
+      "Edge-Loc": 115,
+      "Loc": 85,
+      "Center": 62,
+      "Random": 57,
+      "Edge-Ring": 47
+    }
+  }
+}
+             size    mean  median
+label                            
+Near-full     149  0.1231  0.1221
+Random        866  0.5194  0.5232
+Donut         555  0.7232  0.7424
+Center       4294  0.7675  0.7495
+Edge-Loc     5189  0.8172  0.8443
+Edge-Ring    9680  0.8487  0.8597
+Loc          3593  0.8500  0.8575
+none       147431  0.8944  0.9017
+Scratch      1193  0.8994  0.9083
