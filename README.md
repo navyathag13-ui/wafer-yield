@@ -198,6 +198,31 @@ before trusting its labels.
 
 ![Drift metrics over the Test stream](results/drift.png)
 
+## 6. Serve: run it on Azure and load-test it
+
+The API runs in a Docker container (CPU PyTorch, non-root) on Azure Container Apps. Terraform
+in `infra/` creates the registry, logs, environment, the app with health probes and HTTP
+autoscaling (1 to 5 replicas, one more per 10 requests in flight) and a $10 budget alert.
+`infra/cloudshell_deploy.sh` builds the image inside Azure and applies it from Cloud Shell;
+`infra/cloudshell_destroy.sh` removes it all.
+
+I deployed it on 2026-11-26, ran `scripts/load_test.py` against it from my laptop (70%
+classify, 20% similar, 10% SPC calls, 30 seconds per level) and then destroyed it:
+
+| In flight | Requests/s | p50 | p95 | p99 | Errors |
+|---|---|---|---|---|---|
+| 1 | 17.6 | 49 ms | 94 ms | 130 ms | 0 |
+| 5 | 72.3 | 54 ms | 98 ms | 125 ms | 0 |
+| 10 | 147.9 | 54 ms | 104 ms | 165 ms | 0 |
+| 20 | 255.4 | 68 ms | 153 ms | 210 ms | 0 |
+| 40 | 284.9 | 113 ms | 343 ms | 431 ms | 0 |
+
+23,464 requests, 0 errors. Azure scaled the app from 1 to 5 replicas during the run. The same
+test on one laptop CPU peaked at 16.9 requests/s with a p95 of 844 ms at 10 in flight
+(`results/load_test_local_1cpu.json`), so one replica is the limit and scaling out is what
+carries the load. At 40 in flight all 5 replicas are busy and latency starts to climb.
+Raw numbers: `results/load_test_azure_container_apps.json`.
+
 ## What went wrong and what I changed
 
 - **My first validation split leaked.** I held out random wafers from Training to pick the best
@@ -259,7 +284,7 @@ Bad maps return 422 with the reason (for example `unknown die codes [3]`).
 
 ## Tests
 
-`pytest -q`: 31 tests, all on synthetic wafers (`tests/synthetic.py`), so CI never needs the
+`pytest -q`: 32 tests, all on synthetic wafers (`tests/synthetic.py`), so CI never needs the
 2 GB file. They cover the checks and quarantine counts, the features on known shapes, p-chart
 and Laney math, the run rule, the safe loader, the fail-keeping resize, similarity ranking,
 PSI and the drift monitor, the defect guide and every API endpoint. GitHub Actions runs them
