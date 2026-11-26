@@ -81,3 +81,8 @@ def test_similar_endpoints(client):
     assert len(known["similar"]) == 4 and all(s["lot"] != "lot0" for s in known["similar"])
     assert client.get("/similar/lot0/9").status_code == 404
     assert client.post("/similar", json={"wafer_map": [[0]], "k": 3}).status_code == 422
+
+
+def test_health(client):
+    r = client.get("/health")
+    assert r.status_code == 200 and r.json() == {"status": "ok"}

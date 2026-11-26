@@ -6,13 +6,16 @@
   GET  /similar/{lot}/{i}   the same, for a wafer already in the data (its own lot is excluded)
   GET  /lots/{lot}          one lot's yield and SPC status
   GET  /spc/signals         lots outside the Laney p' limits, worst first
+  GET  /health              loads the model files and reports ok (used by the container probes)
 
 Run:  uvicorn wafer_yield.api:app --reload    (after scripts/run_pipeline.py and scripts/train.py)
 """
 from __future__ import annotations
 
+import contextlib
 import json
 import os
+import threading
 from functools import lru_cache
 from pathlib import Path
 
@@ -31,6 +34,10 @@ from .maps import CLASSES, die_yield, to_channels
 from .similar import SimilarIndex
 
 ROOT = Path(os.environ.get("WAFER_ROOT", Path(__file__).resolve().parents[1]))
+# FastAPI runs these sync handlers on a thread pool. Letting many requests run the CNN at once made
+# them fight over the CPU (throughput fell as concurrency rose), so model calls take turns per process.
+INFER = threading.Lock() if os.environ.get("INFER_LOCK", "1") != "0" else contextlib.nullcontext()
+torch.set_num_threads(int(os.environ.get("TORCH_THREADS", "1")))
 app = FastAPI(title="Wafer yield")
 
 
@@ -89,11 +96,19 @@ def chart() -> pd.DataFrame:
     return pd.read_parquet(path).set_index("lot")
 
 
+@app.get("/health")
+def health():
+    """Liveness and readiness: loads the model files once, so the first real request is not slow."""
+    model(), ensemble(), index(), chart()
+    return {"status": "ok"}
+
+
 @app.post("/classify")
 def classify(body: WaferIn):
     wafer = parse(body.wafer_map)
     gbt, cfg = ensemble()
-    probs = cnn.predict(model(), [wafer], tta=cfg.get("tta", True))[0]
+    with INFER:
+        probs = cnn.predict(model(), [wafer], tta=cfg.get("tta", True))[0]
     if gbt is not None:
         w = cfg["cnn_weight"]
         probs = w * probs + (1 - w) * gbt.predict_proba(features(wafer)[None])[0]
@@ -134,7 +149,7 @@ def signals(limit: int = 20):
 @app.post("/similar")
 def similar(body: SimilarIn):
     wafer = parse(body.wafer_map)
-    with torch.no_grad():
+    with INFER, torch.no_grad():
         vec = model().embed(torch.from_numpy(to_channels(wafer)[None])).numpy()[0]
     return {"k": body.k, "similar": similar_rows(vec, body.k)}
 

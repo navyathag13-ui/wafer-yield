@@ -1,0 +1,73 @@
+{
+  "label": "local_1cpu",
+  "url_host": "localhost",
+  "first_health_ms": 63,
+  "mix": "70% classify, 20% similar, 10% spc/signals",
+  "levels": [
+    {
+      "concurrency": 1,
+      "seconds": 20.0,
+      "requests": 273,
+      "ok": 273,
+      "errors": 0,
+      "error_rate": 0.0,
+      "rps": 13.6,
+      "p50_ms": 74.9,
+      "p95_ms": 129.7,
+      "p99_ms": 261.5,
+      "mean_ms": 73.3,
+      "status_codes": {
+        "200": 273
+      }
+    },
+    {
+      "concurrency": 5,
+      "seconds": 20.3,
+      "requests": 267,
+      "ok": 267,
+      "errors": 0,
+      "error_rate": 0.0,
+      "rps": 13.1,
+      "p50_ms": 365.9,
+      "p95_ms": 888.7,
+      "p99_ms": 1317.4,
+      "mean_ms": 378.2,
+      "status_codes": {
+        "200": 267
+      }
+    },
+    {
+      "concurrency": 10,
+      "seconds": 20.4,
+      "requests": 345,
+      "ok": 345,
+      "errors": 0,
+      "error_rate": 0.0,
+      "rps": 16.9,
+      "p50_ms": 657.8,
+      "p95_ms": 844.1,
+      "p99_ms": 930.6,
+      "mean_ms": 586.1,
+      "status_codes": {
+        "200": 345
+      }
+    },
+    {
+      "concurrency": 20,
+      "seconds": 21.1,
+      "requests": 280,
+      "ok": 280,
+      "errors": 0,
+      "error_rate": 0.0,
+      "rps": 13.2,
+      "p50_ms": 1411.4,
+      "p95_ms": 2537.5,
+      "p99_ms": 2856.7,
+      "mean_ms": 1466.8,
+      "status_codes": {
+        "200": 280
+      }
+    }
+  ],
+  "run_at": "2026-11-26T14:56:13-0600"
+}
